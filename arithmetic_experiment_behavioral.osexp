@@ -1,0 +1,765 @@
+---
+API: 3
+OpenSesame: 4.1.9
+Platform: nt
+---
+set width 1280
+set uniform_coordinates yes
+set title Algebra
+set subject_parity even
+set subject_nr 0
+set start experiment
+set sound_sample_size -16
+set sound_freq 48000
+set sound_channels 2
+set sound_buf_size 1024
+set sampler_backend legacy
+set round_decimals 2
+set mouse_backend xpyriment
+set keyboard_backend legacy
+set height 1024
+set fullscreen no
+set form_clicks no
+set foreground white
+set font_underline no
+set font_size 24
+set font_italic no
+set font_family sans
+set font_bold no
+set experiment_path "C:\\Users\\ruthv\\Downloads"
+set disable_garbage_collection yes
+set description "Algebra for fMRI & EEG"
+set coordinates uniform
+set compensation 0
+set color_backend legacy
+set clock_backend legacy
+set canvas_backend xpyriment
+set bidi yes
+set background black
+
+define form_text_input Answer
+	set timeout "[solve_time]"
+	set spacing 10
+	set rows "1;1;6"
+	set only_render no
+	set margins "50;50;50;50"
+	set form_var participant_response
+	set form_title "Answer:"
+	set form_question ""
+	set description "A simple text input form"
+	set cols 1
+	set _theme gray
+	widget 0 0 1 1 label text="{form_title}"
+	widget 0 1 1 1 label center=no text="{form_question}"
+	widget 0 2 1 1 text_input focus=yes return_accepts=yes stub="" var="{form_var}"
+
+
+define sketchpad Welcome
+	set duration keypress
+	set description "Displays stimuli"
+	draw textline center=1 color=white font_bold=no font_family=sans font_italic=no font_size=24 html=yes show_if=True text="Welcome to the Multiplication Game!<br /><br />Thank you for taking part in this experiment.<br />Get ready to put your mental math skills to the test!<br />Press any key to continue." x=0 y=0 z_index=0
+
+define sequence adaptive_trial_block
+	set flush_keyboard yes
+	set description "Runs four trials followed by adaptation"
+	run trial_loop_experiment always
+	run online_adaptation_script always
+
+define sketchpad black
+	set duration 200
+	set description "Displays stimuli"
+
+define sketchpad black2_1
+	set duration 1
+	set description "Displays stimuli"
+
+define sequence block_sequence
+	set flush_keyboard yes
+	set description "A sequence containing a single block of trials followed by feedback to the participant"
+	run block_stuff always
+	run sub_block_loop True
+	run var_break_time True
+	run end_of_block always
+	run confusion always
+	run black always
+
+define sequence block_sequence_practice
+	set flush_keyboard yes
+	set description "A sequence containing a single block of trials followed by feedback to the participant"
+	run trial_loop_practice always
+
+define inline_script block_stuff
+	set description "Executes Python code"
+	set _run ""
+	set _prepare "var.block = var.block + 1"
+
+define inline_script calculate_callibration
+	set description "Calculates calibration baseline"
+	___run__
+	if var.callibration == 'yes':
+	    print("Calibration trial:", var.trial)
+	    if var.answered_correct == 1:
+	        callibration_list.append(var.answer_time)
+	    if var.trial == 10:
+	        print("Calibration times:", callibration_list)
+	        if len(callibration_list) >= 7:
+	            var.median_time = float(np.median(callibration_list))
+	            var.callibration_order = sorted(callibration_list, reverse=True)
+	            var.callibrated_time = float(np.percentile(callibration_order, 75))
+	        else:
+	            var.callibrated_time = 10000.0
+	        print("Calibration baseline:", var.callibrated_time)
+	__end__
+	set _prepare ""
+
+define loop callibration_loop
+	set source table
+	set repeat 10
+	set order random
+	set description "Calibration trials"
+	set cycles 1
+	set continuous no
+	set break_if_on_first yes
+	set break_if False
+	setcycle 0 confusion_type 0
+	setcycle 0 callibration yes
+	run trial_sequence
+
+define inline_script confusion
+	set description "Executes Python code"
+	set _run "my_mouse.flush()"
+	___prepare__
+	def create_confusion_screen(con_type):
+	
+	    con_screen_text = "you should not see this"
+	
+	    if con_type == 1:
+	
+	        con_screen_text = incorrect_close()
+	
+	    elif con_type == 2:
+	
+	        con_screen_text = incorrect_far()
+	
+	    elif con_type == 3:
+	
+	        con_screen_text = var.correct_response
+	
+	    else:
+	
+	        con_screen_text = ""
+	
+	    return con_screen_text
+	
+	
+	def incorrect_close():
+	
+	    con_screen_text = df.iloc[problem_index]["incorrect_but_close"]
+	
+	    return con_screen_text
+	
+	
+	def incorrect_far():
+	
+	    con_screen_text = df.iloc[problem_index]["incorrect_unrelated"]
+	
+	    return con_screen_text
+	
+	
+	con_screen_text = "something went wrong"
+	
+	con_screen_text = create_confusion_screen(var.confusion_type)
+	
+	var.con_screen = con_screen_text
+	__end__
+
+define sketchpad confusion_screen
+	set duration "[con_dur]"
+	set description "Displays stimuli"
+	draw textline center=1 color=white font_bold=no font_family=sans font_italic=no font_size=24 html=yes show_if=True text="[con_screen]" x=0 y=0 z_index=0
+
+define inline_script create_problem
+	set description "Executes Python code"
+	set _run "my_mouse.flush()"
+	___prepare__
+	var.trial = var.trial + 1
+	
+	max_index = len(df)-1
+	problem_index = random.randrange(max_index)
+	
+	row = df.iloc[problem_index]
+	
+	var.cur_problem = row["problem"]
+	var.correct_response = row["two_digit"] * row["one_digit"]
+	
+	var.problem_two_digits = row["two_digit"]
+	var.problem_one_digit = row["one_digit"]
+	
+	var.fix_dur = 500
+	__end__
+
+define sketchpad end_calibration
+	set duration keypress
+	set description "Displays stimuli"
+	draw textline center=1 color=white font_bold=no font_family=sans font_italic=no font_size=24 html=yes show_if=True text="2nd Phase: Practice<br /><br />Great job completing the Calibration Phase!<br /><br />Now you will have 4 trials to familiarize yourself<br />with the setting of the actual experiment.<br /><br />This is your chance to get comfortable, no pressure at all!<br /><br />Press any key to start the Practice Phase." x=0 y=0 z_index=0
+
+define sketchpad end_of_block
+	set duration keypress
+	set description "Displays stimuli"
+	draw textline center=1 color=white font_bold=no font_family=sans font_italic=no font_size=28 html=yes show_if=always text="This is the end of block [block] of 4. <br />[time_break] <br />Press any key to continue<br />" x=0 y=32 z_index=0
+
+define sketchpad end_of_experiment
+	set start_response_interval no
+	set duration keypress
+	set description "A sketchpad notifying the participant that the experiment is finished"
+	draw textline center=1 color=white font_bold=no font_family=sans font_italic=no font_size=34 html=yes show_if=True text="This is the END!<br /><br />You have successfully completed all 4 blocks.<br />Thank you so much for your participation!" x=0.0 y=96.0 z_index=0
+
+define sketchpad end_of_practice
+	set start_response_interval no
+	set duration keypress
+	set description "A sketchpad notifying the participant that the practice phase is finished"
+	draw textline center=1 color=white font_bold=no font_family=sans font_italic=no font_size=24 html=yes show_if=True text="Experiment Phase:<br />3rd Phase: Experiment<br /><br />You're all set! You've got the hang of it now.<br /><br />The experiment consists of 4 blocks of 20 multiplications each.<br />After introducing the answer press ENTER!!<br />In between blocks you will have breaks to rest.<br /><br /><br />Remember: solve correctly and as fast as you can!<br />If you don't answer within this time, the answer will be counted as incorrect.<br /><br />Press any key to continue<br />" x=0 y=0 z_index=0
+
+define sequence experiment
+	set flush_keyboard yes
+	set description "The main sequence of the experiment"
+	run preparation always
+	run init_vars always
+	run Welcome True
+	run instructions always
+	run start_calibration always
+	run black always
+	run callibration_loop True
+	run end_calibration True
+	run initialize_adaptation True
+	run practice_loop always
+	run end_of_practice always
+	run start_of_exp always
+	run black always
+	run start_experiment_adaptation True
+	run experimental_loop always
+	run end_of_experiment always
+
+define loop experimental_loop
+	set source_file ""
+	set source table
+	set skip 0
+	set repeat 1
+	set order sequential
+	set offset no
+	set item block_sequence
+	set description "A loop containing one or more experimental blocks"
+	set cycles 4
+	set continuous no
+	set column_order practice
+	set break_if_on_first yes
+	set break_if never
+	setcycle 0 practice no
+	setcycle 1 practice no
+	setcycle 2 practice no
+	setcycle 3 practice no
+	run block_sequence
+
+define sketchpad fixation
+	set start_response_interval no
+	set duration "[fix_dur]"
+	set description "Displays stimuli"
+	draw fixdot color=white show_if=always style=default x=0 y=0 z_index=0
+
+define sketchpad fixation_end
+	set duration 995
+	set description "Displays stimuli"
+	draw textline center=1 color=white font_bold=no font_family=sans font_italic=no font_size=38 html=yes show_if=always text="+" x=0 y=0 z_index=0
+
+define inline_script init_vars
+	set description "Executes Python code"
+	___run__
+	var.window_time = 10000
+	var.solve_time = var.window_time
+	var.problem_dur = 2000
+	var.con_dur = 500
+	__end__
+	set _prepare ""
+
+define inline_script initialize_adaptation
+	set description "Initializes adaptive answer time"
+	___run__
+	adaptive.initialize(var.median_time)
+	
+	var.solve_time = adaptive.get_current_time()
+	var.callibration = 'no'
+	
+	print("Adaptive timing initialized:", var.solve_time)
+	__end__
+	set _prepare ""
+
+define sketchpad instructions
+	set duration keypress
+	set description "Displays stimuli"
+	draw textline center=1 color=white font_bold=no font_family=sans font_italic=no font_size=28 html=yes show_if=True text="Explaining the experiment:<br />For this experiment you have to solve two-digit by 1 digit multiplications<br />which will be separated by some time.<br />Example: 12 x 8<br /><br />What does this experiment consist of?<br />1- A window will appear with the equation, example: 12 x 8<br />2- Then wait for the response prompt to appear<br />3- Type in the numerical answer to the multiplication when prompted <br />and after press ENTER<br /><br />Goal: You need to solve the multiplication correctly<br />while being as fast as possible.<br /><br />This experiment consists of 3 phases: Calibration, Practice and Experiment.<br />Let's go through each one!<br />Press any key to continue." x=0 y=0 z_index=0
+
+define inline_script keypad_response
+	set description "Executes Python code"
+	___run__
+	# if var.response_problem == 'None':
+	    # var.RT_problem = var.response_time_problem
+	    # var.RT_response = 0
+	    # var.response = 'None'
+	    # var.fbstate = 'toolate'
+	#
+	# else:
+	#
+	    # ## display canvas
+	    # var.time_keypad = keypad_canvas.show()
+	    #
+	    # ## display mouse
+	    # my_mouse.flush()
+	    # my_mouse.set_pos(pos=(0,0))
+	    # #my_mouse.show_cursor(show=True)
+	#
+	    # ## capture response
+	    # response = 0
+	    # timeout = 2000 #timeout is 2 seconds
+	#
+	    # ## process response
+	    # while response == 0:
+	        # button, mouse_loc, mouse_time = my_mouse.get_click(buttonlist=[1], timeout=(var.time_keypad + timeout - clock.time()),visible=True)
+	        # if button == None:
+	            # response = 'None'
+	            # var.fbstate = 'tooslow'
+	            #
+	        # else:
+	            # mouse_x = mouse_loc[0]
+	            # mouse_y = mouse_loc[1]
+	            # #if mouse_x > min_x and mouse_x < max_x and mouse_y > min_y and mouse_y < max_y:
+	            # cnt = 0
+	            # for x, y in keys_xy:
+	                # if mouse_x > (x-displacement) and mouse_x < (x+displacement) and mouse_y > (y-displacement) and mouse_y < (y+displacement):
+	                    # response = keys_val[cnt]
+	                    # break
+	                # cnt = cnt + 1
+	#
+	    # #log RTs and response
+	    # var.RT_problem = var.response_time_problem
+	    # var.RT_response = mouse_time - var.time_keypad
+	    # var.response = response
+	    # var.total_problem = var.RT_response + var.RT_problem
+	    # #determine correctness
+	    # if var.response == var.correct_response:
+	        # var.correct = 1
+	        # var.fbstate = 'correct'
+	        #
+	    # elif var.response != 'None':
+	        # var.fbstate = 'wrong'
+	__end__
+	set _prepare ""
+
+define logger logger
+	set description "Logs experimental data"
+	set auto_log no
+	log problem_one_digit
+	log problem_two_digits
+	log experiment_file
+	log datetime
+	log subject_nr
+	log practice
+	log callibration
+	log block
+	log trial
+	log fix_dur
+	log con_dur
+	log cur_problem
+	log correct_response
+	log response
+	log answered_correct
+	log answer_time
+	log solve_time
+	log confusion_type
+	log adaptive_accuracy
+	log con_screen
+
+define inline_script online_adaptation_script
+	set description "Executes Python code"
+	___run__
+	adaptive.adapt()
+	var.solve_time = adaptive.get_current_time()
+	var.adaptive_accuracy = adaptive.get_recent_accuracy()
+	__end__
+	set _prepare ""
+
+define loop practice_loop
+	set source_file ""
+	set source table
+	set skip 0
+	set repeat 1
+	set order random
+	set offset no
+	set item block_sequence_practice
+	set description "A loop containing one or more practice blocks"
+	set cycles 1
+	set continuous no
+	set column_order practice
+	set break_if_on_first yes
+	set break_if never
+	setcycle 0 practice yes
+	run block_sequence_practice
+
+define inline_script preparation
+	set description "Executes Python code"
+	___run__
+	my_mouse.flush()
+	#keypad_canvas.show()
+	#print 'hallo'
+	__end__
+	___prepare__
+	import random
+	import pandas as pd
+	import numpy as np
+	import time
+	var.block = 0
+	var.trial = 0
+	callibration_list = []
+	#prepare mouse
+	my_mouse = mouse()
+	#prepare keypad canvas
+	keypad_canvas = canvas()
+	keypad_canvas.penwidth = 2
+	keypad_canvas.font_size = 24
+	# draw keys
+	#keys_xy = xy_grid(3, 48)
+	keys_xy = xy_circle(9,70,-85)
+	keys_val = [1,2,3,4,5,6,7,8,9]
+	button_size = 42
+	displacement = button_size/2
+	min_x = min(keys_xy)[0] - displacement
+	max_x = max(keys_xy)[0] + displacement
+	min_y = min(keys_xy)[1] - displacement
+	max_y = max(keys_xy)[1] + displacement
+	i = 0
+	for x, y in keys_xy:
+	    #keypad_canvas.rect(x-displacement, y-displacement, button_size, button_size, fill=True, color='lightslategrey')
+	    #keypad_canvas.rect(x-displacement, y-displacement, button_size, button_size, color='darkgrey')
+	    keypad_canvas.circle(x,y,button_size/2,fill=True,color='lightslategrey')
+	    keypad_canvas.circle(x,y,button_size/2,color='darkgrey')
+	    #digit
+	    keypad_canvas.text(keys_val[i],x=x,y=y)
+	    i=i+1
+	# 1) Read the Excel file
+	# margot path
+	df = pd.read_excel('C:/Users/ruthv/Downloads/multiplications_filled.xlsx')
+	#df = pd.read_excel('C:/Users/Jaylee van Ligten/Downloads/multiplications_filled.xlsx')
+	# 2) Dataframe already holds all columns with the same names as in the Excel file:
+	# problem, two_digit, one_digit, correct_answer, incorrect_but_close, incorrect_unrelated
+	# 3) Save each column as its own variable
+	problems = df['problem']
+	two_digit = df['two_digit']
+	one_digit = df['one_digit']
+	correct_answer = df['correct_answer']
+	incorrect_but_close = df['incorrect_but_close']
+	incorrect_unrelated = df['incorrect_unrelated']
+	class AdaptiveAnswerTime:
+	    def __init__(
+	        self,
+	        calibration_trials=10,
+	        min_correct_required=7,
+	        lower_threshold=0.70,
+	        upper_threshold=0.90,
+	        target_accuracy=0.80,
+	        max_step=200,
+	        min_fraction=0.40,
+	        absolute_floor=800,
+	        max_time_buffer=3000,
+	        window_size=12
+	    ):
+	        self.calibration_trials = calibration_trials
+	        self.min_correct_required = min_correct_required
+	        self.calibration_times = []
+	        self.calibration_correct = []
+	        self.lower_threshold = lower_threshold
+	        self.upper_threshold = upper_threshold
+	        self.target_accuracy = target_accuracy
+	        self.max_step = max_step
+	        self.min_fraction = min_fraction
+	        self.absolute_floor = absolute_floor
+	        self.max_time_buffer = max_time_buffer
+	        self.window_size = window_size
+	        self.accuracy_history = []
+	        self.current_time = None
+	        self.min_time = None
+	        self.max_time = None
+	        self.calibration_reliable = None
+	    def record_calibration_trial(self, solving_time, correct):
+	        if (
+	            solving_time is not None
+	            and len(self.calibration_times) < self.calibration_trials
+	        ):
+	            self.calibration_times.append(solving_time)
+	            self.calibration_correct.append(bool(correct))
+	    def finish_calibration(self):
+	        if len(self.calibration_times) < self.calibration_trials:
+	            raise ValueError(
+	                f"Expected {self.calibration_trials} "
+	                f"calibration trials, but only received "
+	                f"{len(self.calibration_times)}."
+	            )
+	        correct_times = [
+	            time
+	            for time, correct in zip(
+	                self.calibration_times,
+	                self.calibration_correct
+	            )
+	            if correct
+	        ]
+	        if len(correct_times) < self.min_correct_required:
+	            self.calibration_reliable = False
+	            median_time = 10000.0
+	        else:
+	            self.calibration_reliable = True
+	            median_time = float(np.median(correct_times))
+	        self.max_time = median_time + self.max_time_buffer
+	        self.min_time = max(
+	            self.absolute_floor,
+	            median_time * self.min_fraction
+	        )
+	        self.current_time = float(
+	            np.clip(
+	                median_time,
+	                self.min_time,
+	                self.max_time
+	            )
+	        )
+	        return self.current_time
+	    def initialize(self, baseline):
+	        self.max_time = baseline + self.max_time_buffer
+	        self.min_time = max(
+	            self.absolute_floor,
+	            baseline * self.min_fraction
+	        )
+	        self.current_time = float(
+	            np.clip(
+	                baseline,
+	                self.min_time,
+	                self.max_time
+	            )
+	        )
+	        return self.current_time
+	    def record_trial(self, correct):
+	        if correct is None:
+	            return
+	        if isinstance(correct, (float, np.floating)):
+	            if np.isnan(correct):
+	                return
+	        self.accuracy_history.append(bool(correct))
+	    def adapt(self):
+	        if self.current_time is None:
+	            raise ValueError(
+	                "Calibration should first be completed "
+	                "before adaptation."
+	            )
+	        if len(self.accuracy_history) < self.window_size:
+	            return self.current_time
+	        recent_trials = self.accuracy_history[-self.window_size:]
+	        accuracy = np.mean(recent_trials)
+	        if accuracy < self.lower_threshold:
+	            difference = self.lower_threshold - accuracy
+	            adjustment = (
+	                difference / 0.05
+	            ) * self.max_step
+	            adjustment = float(
+	                np.clip(
+	                    adjustment,
+	                    0,
+	                    self.max_step
+	                )
+	            )
+	            self.current_time += adjustment
+	        elif accuracy > self.upper_threshold:
+	            difference = accuracy - self.upper_threshold
+	            adjustment = (
+	                difference / 0.05
+	            ) * self.max_step
+	            adjustment = float(
+	                np.clip(
+	                    adjustment,
+	                    0,
+	                    self.max_step
+	                )
+	            )
+	            self.current_time -= adjustment
+	        self.current_time = float(
+	            np.clip(
+	                self.current_time,
+	                self.min_time,
+	                self.max_time
+	            )
+	        )
+	        return self.current_time
+	    def get_current_time(self):
+	        return self.current_time
+	    def get_recent_accuracy(self):
+	        if len(self.accuracy_history) < self.window_size:
+	            return None
+	        recent_trials = self.accuracy_history[-self.window_size:]
+	        return np.mean(recent_trials)
+	adaptive = AdaptiveAnswerTime()
+	var.experiment_phase = 'calibration'
+	__end__
+
+define sketchpad problem
+	set timeout "[problem_dur]"
+	set duration "[problem_dur]"
+	set description "Displays stimuli"
+	draw textline center=1 color=white font_bold=no font_family=sans font_italic=no font_size=28 html=yes show_if=always text="[cur_problem]" x=0 y=0 z_index=0
+
+define inline_script record_accuracy
+	set description "Records trial accuracy for adaptive timing"
+	___run__
+	if var.experiment_phase == 'experiment':
+	    adaptive.record_trial(var.correct)
+	__end__
+	set _prepare ""
+
+define inline_script response_evaluation
+	set description "Executes Python code"
+	___run__
+	# # #log RTs and response
+	#var.RT_problem = var.response_time_problem
+	#var.RT_response = mouse_time - var.time_keypad
+	var.response = participant_response
+	# Calculate how long participant took to answer
+	var.answer_time = (time.perf_counter() - var.start_time) * 1000
+	var.answered_correct = 0
+	var.correct = 0
+	# Convert typed response to a number
+	try:
+	    response_value = int(participant_response)
+	except (TypeError, ValueError):
+	    response_value = None
+	if response_value == int(var.correct_response):
+	    var.answered_correct = 1
+	    var.correct = 1
+	    print("correctomundo")
+	else:
+	    var.correct = 0
+	    print("bad, very bad")
+	df = df.drop(df.index[problem_index])
+	print("ARE WE DELETING THIS STUFF??????", df.shape)
+	problems = df['problem']
+	two_digit = df['two_digit']
+	one_digit = df['one_digit']
+	correct_answer = df['correct_answer']
+	incorrect_but_close = df['incorrect_but_close']
+	incorrect_unrelated = df['incorrect_unrelated']
+	__end__
+	set _prepare ""
+
+define sketchpad start_calibration
+	set start_response_interval no
+	set duration keypress
+	set description "A sketchpad containing the instructions for the participant"
+	draw textline center=1 color=white font_bold=no font_family=sans font_italic=no font_size=24 html=yes show_if=True text="Calibration Phase:<br />1st Phase: Calibration<br /><br />You will need to solve 10 multiplications, one by one,<br />without any extra stimulus.<br /><br />After introducing the answer press ENTER<br /><br />This helps us set the right amount of time for you<br />to solve the equations in the Experiment Phase.<br /><br />Take your time and do your best, you're doing great!<br /><br />Press any key to start the Calibration Phase." x=0 y=0 z_index=0
+
+define inline_script start_experiment_adaptation
+	set description "Starts experimental adaptation"
+	___run__
+	var.experiment_phase = 'experiment'
+	print("Experimental adaptation started")
+	print("Initial solve time:", adaptive.get_current_time())
+	__end__
+	set _prepare ""
+
+define sketchpad start_of_exp
+	set duration keypress
+	set description "Displays stimuli"
+	draw textline center=1 color=white font_bold=no font_family=sans font_italic=no font_size=24 html=yes show_if=True text="The experiment will start now. Good luck!<br /><br />Press any key to start the experiment." x=0 y=0 z_index=0
+
+define inline_script start_timer
+	set description "Executes Python code"
+	set _run "var.start_time = time.perf_counter()"
+	set _prepare ""
+
+define loop sub_block_loop
+	set source_file ""
+	set source table
+	set repeat 1
+	set order random
+	set description "Repeatedly runs another item"
+	set cycles 5
+	set continuous no
+	set break_if_on_first yes
+	set break_if never
+	setcycle 0 sub_block 1
+	setcycle 1 sub_block 2
+	setcycle 2 sub_block 3
+	setcycle 3 sub_block 4
+	setcycle 4 sub_block 5
+	run adaptive_trial_block
+
+define loop trial_loop_experiment
+	set source_file ""
+	set source table
+	set skip 0
+	set repeat 1
+	set order random
+	set offset no
+	set item trial_sequence
+	set description "A single block of trials"
+	set cycles 4
+	set continuous no
+	set column_order "problem_type;Retrieval;Transformation"
+	set break_if_on_first yes
+	set break_if False
+	setcycle 0 confusion_type 0
+	setcycle 1 confusion_type 1
+	setcycle 2 confusion_type 2
+	setcycle 3 confusion_type 3
+	run trial_sequence
+
+define loop trial_loop_practice
+	set source_file ""
+	set source table
+	set skip 0
+	set repeat 1
+	set order random
+	set offset no
+	set item trial_sequence
+	set description "A single block of trials"
+	set cycles 4
+	set continuous no
+	set column_order "problem_type;Retrieval;Transformation"
+	set break_if_on_first yes
+	set break_if False
+	setcycle 0 confusion_type 0
+	setcycle 1 confusion_type 1
+	setcycle 2 confusion_type 2
+	setcycle 3 confusion_type 3
+	run trial_sequence
+
+define sequence trial_sequence
+	set flush_keyboard yes
+	set description "A single trial"
+	run create_problem always
+	run fixation always
+	run confusion always
+	run problem always
+	run confusion_screen True
+	run start_timer True
+	run Answer True
+	run response_evaluation True
+	run calculate_callibration True
+	run keypad_response always
+	run record_accuracy always
+	run black2_1 always
+	run fixation_end always
+	run logger always
+
+define inline_script var_break_time
+	set description "Ejecuta código en Python"
+	set _run ""
+	___prepare__
+	if block < 4:
+	    time_break = "You can take a short break."
+	else:
+	    time_break = "Well done!"
+	__end__
+
